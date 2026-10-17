@@ -1,5 +1,6 @@
 package org.feeluown.mobile.persistence.listening
 
+import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.runBlocking
 import org.feeluown.mobile.ListeningHistoryRecord
 import org.feeluown.mobile.ListeningResourceRelation
@@ -13,6 +14,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class IosListeningHistoryDriverFactoryTest {
+    @OptIn(ExperimentalForeignApi::class)
     @Test
     fun createsDatabaseAndStoreCanReadRecentEventsAndAggregateStatistics() = runBlocking {
         val store = SqlDelightListeningHistoryStore(IosListeningHistoryDriverFactory())
