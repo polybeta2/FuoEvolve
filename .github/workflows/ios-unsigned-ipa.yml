@@ -138,7 +138,14 @@ jobs:
         run: ./gradlew --warning-mode all ciIosTest
 
       - name: Build device app
+        env:
+          JAVA_TOOL_OPTIONS: -Xmx6g
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx6g -Dorg.gradle.workers.max=1 -Dorg.gradle.parallel=false"
         run: |
+          echo "Physical memory:"
+          sysctl -n hw.memsize
+          vm_stat
+          ./gradlew --stop
           xcodebuild \
             -project iosApp/FuoEvolve.xcodeproj \
             -scheme FuoEvolve \
