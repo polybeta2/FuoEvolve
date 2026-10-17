@@ -20,4 +20,7 @@ data class AppPlatformBindings(
     /** Called from an explicit migration action before an OS-visible long task is scheduled. */
     val onPreparePlaylistMigrationBackground: () -> Unit = {},
     val desktopVideoSettingsAvailable: Boolean = false,
+    val hasAppleMusicPermission: Boolean = true,
+    val showAppleMusicPermission: Boolean = false,
+    val onRequestAppleMusicPermission: () -> Unit = {},
 )

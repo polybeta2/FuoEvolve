@@ -6,6 +6,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.window.ComposeUIViewController
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -75,12 +78,23 @@ private fun IosApp(
             networkStatusOutput, audioRecognitionOutput, oauthDeviceCodeOutput,
         )
     }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner, container) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) container.refreshAppleMusicPermission()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     AppRoot(
         appViewModel = container.appViewModel,
         uiGraph = container.appUiGraph,
         platform = AppPlatformBindings(
             hasAudioPermission = container.hasAudioPermission,
             onRequestAudioPermission = container::requestAudioPermission,
+            hasAppleMusicPermission = container.hasAppleMusicPermission,
+            showAppleMusicPermission = true,
+            onRequestAppleMusicPermission = container::requestAppleMusicPermission,
             audioRecognitionAccess = AudioRecognitionAccess(
                 source = AudioRecognitionSource.Microphone,
                 isAvailable = container.hasMicrophonePermission,
@@ -135,6 +149,7 @@ private class IosAppContainer(
     oauthDeviceCodeOutput: IosOAuthDeviceCodeOutput,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val mediaLibrary = mediaLibraryOutput
     private val providerGraph = createFuoProviderGraph(
         credentials = IosProviderCredentialStore(),
         persistentCache = IosProviderCacheStore(),
@@ -258,6 +273,11 @@ private class IosAppContainer(
             scope = scope,
             onTrackUpdated = { trackId, track -> playbackFeatureOwner.updateTrackCopies(trackId, track) },
         )
+    }
+
+    init {
+        // Downloads and imported files remain usable while Apple Music access is optional.
+        localMusicFeatureController.onPermissionChange(true)
     }
 
     private val downloadActionPort: DownloadActionPort by lazy {
@@ -477,13 +497,23 @@ private class IosAppContainer(
     var hasMicrophonePermission by mutableStateOf(audioRecognitionOutput.hasPermission())
         private set
 
-    val hasAudioPermission: Boolean get() = localRepository.hasPermission
+    val hasAudioPermission: Boolean get() = true
+
+    var hasAppleMusicPermission by mutableStateOf(mediaLibrary.hasPermission())
+        private set
 
     fun requestAudioPermission() {
-        localRepository.requestPermission {
-            localMusicFeatureController.onPermissionChange(true)
-            localMusicFeatureController.refresh()
+        requestAppleMusicPermission()
+    }
+
+    fun requestAppleMusicPermission() {
+        mediaLibrary.requestPermission { granted ->
+            hasAppleMusicPermission = granted
         }
+    }
+
+    fun refreshAppleMusicPermission() {
+        hasAppleMusicPermission = mediaLibrary.hasPermission()
     }
 
     fun requestMicrophonePermission() {

@@ -71,6 +71,9 @@ internal data class LocalMusicCollection(
 fun LocalMusicSection(
     hasAudioPermission: Boolean,
     onRequestAudioPermission: () -> Unit,
+    hasAppleMusicPermission: Boolean,
+    showAppleMusicPermission: Boolean,
+    onRequestAppleMusicPermission: () -> Unit,
     hasImagePermission: Boolean,
     onRequestImagePermission: () -> Unit,
     showModeFilter: Boolean,
@@ -79,6 +82,7 @@ fun LocalMusicSection(
     val graph = LocalLocalMusicUiGraph.current
     val uiState by graph.feature.uiState.collectAsStateWithLifecycle()
     var previousImagePermission by remember { mutableStateOf<Boolean?>(null) }
+    var previousAppleMusicPermission by remember { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(hasAudioPermission, hasImagePermission) {
         graph.feature.onPermissionChange(hasAudioPermission)
         if (hasAudioPermission) {
@@ -89,6 +93,12 @@ fun LocalMusicSection(
             }
         }
         previousImagePermission = hasImagePermission
+    }
+    LaunchedEffect(hasAppleMusicPermission) {
+        if (shouldRefreshAfterAppleMusicPermissionChange(previousAppleMusicPermission, hasAppleMusicPermission)) {
+            graph.feature.refresh()
+        }
+        previousAppleMusicPermission = hasAppleMusicPermission
     }
     val viewMode = uiState.viewMode
     val collections = remember(
@@ -112,6 +122,9 @@ fun LocalMusicSection(
         if (!hasAudioPermission) {
             PermissionPanel(onRequestAudioPermission)
             return@Column
+        }
+        if (showAppleMusicPermission && !hasAppleMusicPermission) {
+            AppleMusicPermissionRow(onRequestAppleMusicPermission)
         }
         if (!hasImagePermission) {
             LocalMusicImagePermissionPanel(onRequestImagePermission)
@@ -137,6 +150,34 @@ fun LocalMusicSection(
                 .weight(1f)
                 .fillMaxWidth(),
         )
+    }
+}
+
+internal fun shouldRefreshAfterAppleMusicPermissionChange(previous: Boolean?, current: Boolean): Boolean =
+    previous == false && current
+
+@Composable
+private fun AppleMusicPermissionRow(onRequestPermission: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = FuoSpacing.md, vertical = FuoSpacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(FuoSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Apple Music 资料库", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "只影响 Apple Music 资料库，不影响下载与文件导入",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(onClick = onRequestPermission) { Text("允许访问") }
+        }
     }
 }
 

@@ -46,6 +46,9 @@ fun MineHomeSection(
     home: HomeFeatureController,
     hasAudioPermission: Boolean,
     onRequestAudioPermission: () -> Unit,
+    hasAppleMusicPermission: Boolean,
+    showAppleMusicPermission: Boolean,
+    onRequestAppleMusicPermission: () -> Unit,
     hasImagePermission: Boolean,
     onRequestImagePermission: () -> Unit,
     modifier: Modifier,
@@ -61,8 +64,13 @@ fun MineHomeSection(
             state.minePlaylistSections.isNotEmpty() || state.mineFavoritePlaylistSections.isNotEmpty()
         MineSection.Artists -> state.mineSections.any { it.feature.contentType == ProviderContentType.Artists }
         MineSection.Albums -> state.mineSections.any { it.feature.contentType == ProviderContentType.Albums }
-        MineSection.LocalMusic ->
-            !hasAudioPermission || localMusicState.tracks.isNotEmpty() || localMusicState.directories.isNotEmpty()
+        MineSection.LocalMusic -> hasInitialLocalMusicContent(
+            hasAudioPermission = hasAudioPermission,
+            showAppleMusicPermission = showAppleMusicPermission,
+            hasAppleMusicPermission = hasAppleMusicPermission,
+            hasTracks = localMusicState.tracks.isNotEmpty(),
+            hasDirectories = localMusicState.directories.isNotEmpty(),
+        )
     }
     var initialLoadPending by rememberSaveable(state.mineSection) { mutableStateOf(!hasInitialContent) }
     var initialLoadStarted by rememberSaveable(state.mineSection) { mutableStateOf(isLoading) }
@@ -96,6 +104,9 @@ fun MineHomeSection(
                     MineSection.LocalMusic -> LocalMusicSection(
                         hasAudioPermission = hasAudioPermission,
                         onRequestAudioPermission = onRequestAudioPermission,
+                        hasAppleMusicPermission = hasAppleMusicPermission,
+                        showAppleMusicPermission = showAppleMusicPermission,
+                        onRequestAppleMusicPermission = onRequestAppleMusicPermission,
                         hasImagePermission = hasImagePermission,
                         onRequestImagePermission = onRequestImagePermission,
                         showModeFilter = !wide,
@@ -115,6 +126,17 @@ fun MineHomeSection(
         }
     }
 }
+
+internal fun hasInitialLocalMusicContent(
+    hasAudioPermission: Boolean,
+    showAppleMusicPermission: Boolean,
+    hasAppleMusicPermission: Boolean,
+    hasTracks: Boolean,
+    hasDirectories: Boolean,
+): Boolean = !hasAudioPermission ||
+    (showAppleMusicPermission && !hasAppleMusicPermission) ||
+    hasTracks ||
+    hasDirectories
 
 @Composable
 private fun MineOwnerChips(home: HomeFeatureController, includeSecondary: Boolean) {
