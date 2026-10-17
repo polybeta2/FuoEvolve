@@ -39,6 +39,7 @@ fun MainViewController(
     audioOutput: IosAudioOutput,
     videoOutput: IosVideoOutput,
     mediaLibraryOutput: IosMediaLibraryOutput,
+    fileMusicOutput: IosFileMusicOutput,
     downloadOutput: IosDownloadOutput,
     webLoginOutput: IosWebLoginOutput,
     shareOutput: IosShareOutput,
@@ -48,7 +49,7 @@ fun MainViewController(
     oauthDeviceCodeOutput: IosOAuthDeviceCodeOutput,
 ): UIViewController = ComposeUIViewController {
     IosApp(
-        audioOutput, videoOutput, mediaLibraryOutput, downloadOutput, webLoginOutput,
+        audioOutput, videoOutput, mediaLibraryOutput, fileMusicOutput, downloadOutput, webLoginOutput,
         shareOutput, localPlaylistFileOutput, networkStatusOutput, audioRecognitionOutput, oauthDeviceCodeOutput,
     )
 }
@@ -58,6 +59,7 @@ private fun IosApp(
     audioOutput: IosAudioOutput,
     videoOutput: IosVideoOutput,
     mediaLibraryOutput: IosMediaLibraryOutput,
+    fileMusicOutput: IosFileMusicOutput,
     downloadOutput: IosDownloadOutput,
     webLoginOutput: IosWebLoginOutput,
     shareOutput: IosShareOutput,
@@ -69,7 +71,7 @@ private fun IosApp(
     IosVideoOutputHolder.output = videoOutput
     val container = remember {
         IosAppContainer(
-            audioOutput, mediaLibraryOutput, downloadOutput, webLoginOutput,
+            audioOutput, mediaLibraryOutput, fileMusicOutput, downloadOutput, webLoginOutput,
             networkStatusOutput, audioRecognitionOutput, oauthDeviceCodeOutput,
         )
     }
@@ -125,6 +127,7 @@ private fun IosApp(
 private class IosAppContainer(
     audioOutput: IosAudioOutput,
     mediaLibraryOutput: IosMediaLibraryOutput,
+    fileMusicOutput: IosFileMusicOutput,
     downloadOutput: IosDownloadOutput,
     private val webLoginOutput: IosWebLoginOutput,
     networkStatusOutput: IosNetworkStatusOutput,
@@ -143,9 +146,13 @@ private class IosAppContainer(
         providerCatalog = providerGraph.content,
         providerPlaybackSource = providerGraph.playbackSource,
     )
-    private val localRepository = IosLocalMusicRepository(mediaLibraryOutput)
     private val localPlaylistRepository = IosLocalPlaylistRepository()
     private val downloadRepository = IosDownloadRepository(playbackProvider, downloadOutput)
+    private val localRepository = IosLocalMusicRepository(
+        mediaLibrary = mediaLibraryOutput,
+        fileMusicOutput = fileMusicOutput,
+        downloadTasks = { downloadRepository.tasks.value },
+    )
     private val settingsRepository = createIosAppSettingsRepository(scope)
     private val playbackEngine = IosNativeAudioEngine(scope, audioOutput, settingsRepository)
     private val providerSessionRepository = DefaultProviderSessionRepository(providerGraph.auth)

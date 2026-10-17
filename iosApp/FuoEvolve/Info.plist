@@ -22,6 +22,10 @@
     <true/>
     <key>LSRequiresIPhoneOS</key>
     <true/>
+    <key>UIFileSharingEnabled</key>
+    <true/>
+    <key>LSSupportsOpeningDocumentsInPlace</key>
+    <true/>
     <key>NSAppleMusicUsageDescription</key>
     <string>用于扫描并播放本地音乐库。</string>
     <key>NSMicrophoneUsageDescription</key>

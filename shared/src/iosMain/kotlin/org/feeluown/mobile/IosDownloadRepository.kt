@@ -8,16 +8,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import platform.Foundation.NSUserDefaults
 import kotlin.coroutines.resume
 
 class IosDownloadRepository(
     private val providerRepository: PlaybackProviderPort,
     private val output: IosDownloadOutput,
+    private val defaults: NSUserDefaults = NSUserDefaults.standardUserDefaults,
 ) : DownloadRepository {
     private val mutableStates = MutableStateFlow<Map<String, DownloadState>>(emptyMap())
     private val mutableTasks = MutableStateFlow<List<DownloadTask>>(emptyList())
-    private val defaults = NSUserDefaults.standardUserDefaults
     private val taskRecords = linkedMapOf<String, DownloadTask>()
     private val taskPayloads = mutableMapOf<String, PlaybackPayload>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -199,34 +203,14 @@ class IosDownloadRepository(
     private fun readTasks(): List<DownloadTask> {
         return defaults.stringForKey(KEY_DOWNLOAD_TASKS)
             ?.lineSequence()
-            ?.mapNotNull { line ->
-                val values = line.split(TASK_FIELD_SEPARATOR)
-                if (values.size < 8) return@mapNotNull null
-                val status = runCatching { DownloadTaskStatus.valueOf(values[5]) }.getOrNull() ?: return@mapNotNull null
-                DownloadTask(
-                    id = values[0],
-                    track = MusicTrack(
-                        id = values[1], title = values[2], artists = values[3], album = values[4],
-                        source = values[6], sourceType = TrackSourceType.Provider,
-                    ),
-                    status = status,
-                    createdAt = values[7].toLongOrNull() ?: 0,
-                    completedUri = values.getOrNull(8)?.takeIf { it.isNotBlank() },
-                    failureMessage = values.getOrNull(9)?.takeIf { it.isNotBlank() },
-                )
-            }
+            ?.mapNotNull(::decodeIosDownloadTask)
             ?.toList()
             .orEmpty()
     }
 
     private fun writeTasks() {
         defaults.setObject(
-            taskRecords.values.joinToString("\n") { task ->
-                listOf(
-                    task.id, task.track.id, task.track.title, task.track.artists, task.track.album,
-                    task.status.name, task.track.source, task.createdAt.toString(), task.completedUri.orEmpty(), task.failureMessage.orEmpty(),
-                ).joinToString(TASK_FIELD_SEPARATOR)
-            },
+            taskRecords.values.joinToString("\n", transform = ::encodeIosDownloadTask),
             KEY_DOWNLOAD_TASKS,
         )
         defaults.synchronize()
@@ -258,6 +242,54 @@ class IosDownloadRepository(
         private const val KEY_DOWNLOAD_RECORDS = "ios_download_records"
         private const val KEY_DOWNLOAD_TASKS = "ios_download_tasks"
         private const val RECORD_SEPARATOR = "\u001f"
-        private const val TASK_FIELD_SEPARATOR = "\u001e"
     }
+}
+
+private const val IOS_DOWNLOAD_TASK_FIELD_SEPARATOR = "\u001e"
+
+internal fun encodeIosDownloadTask(task: DownloadTask): String {
+    return listOf(
+        task.id, task.track.id, task.track.title, task.track.artists, task.track.album,
+        task.status.name, task.track.source, task.createdAt.toString(), task.completedUri.orEmpty(),
+        task.failureMessage.orEmpty(), task.track.durationMs?.toString().orEmpty(),
+        encodeIosDownloadField(task.track.providerId), encodeIosDownloadField(task.track.providerName),
+        encodeIosDownloadField(task.track.coverUrl), encodeIosDownloadField(task.track.lyrics),
+    ).joinToString(IOS_DOWNLOAD_TASK_FIELD_SEPARATOR)
+}
+
+internal fun decodeIosDownloadTask(value: String): DownloadTask? {
+    val values = value.split(IOS_DOWNLOAD_TASK_FIELD_SEPARATOR)
+    if (values.size < 8) return null
+    val status = runCatching { DownloadTaskStatus.valueOf(values[5]) }.getOrNull() ?: return null
+    return DownloadTask(
+        id = values[0],
+        track = MusicTrack(
+            id = values[1],
+            title = values[2],
+            artists = values[3],
+            album = values[4],
+            source = values[6],
+            sourceType = TrackSourceType.Provider,
+            durationMs = values.getOrNull(10)?.toLongOrNull(),
+            providerId = values.getOrNull(11)?.let(::decodeIosDownloadField),
+            providerName = values.getOrNull(12)?.let(::decodeIosDownloadField),
+            coverUrl = values.getOrNull(13)?.let(::decodeIosDownloadField),
+            lyrics = values.getOrNull(14)?.let(::decodeIosDownloadField),
+        ),
+        status = status,
+        createdAt = values[7].toLongOrNull() ?: 0,
+        completedUri = values.getOrNull(8)?.takeIf { it.isNotBlank() },
+        failureMessage = values.getOrNull(9)?.takeIf { it.isNotBlank() },
+    )
+}
+
+private fun encodeIosDownloadField(value: String?): String = JsonPrimitive(value.orEmpty()).toString()
+
+private fun decodeIosDownloadField(value: String): String? {
+    val decoded = if (value.startsWith('"')) {
+        runCatching { Json.parseToJsonElement(value).jsonPrimitive.contentOrNull }.getOrNull()
+    } else {
+        value
+    }
+    return decoded?.takeIf { it.isNotBlank() }
 }

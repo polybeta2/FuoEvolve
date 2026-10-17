@@ -422,6 +422,7 @@ private struct SharedComposeRoot: UIViewControllerRepresentable {
             audioOutput: IOSNativeAudioEngine.shared,
             videoOutput: IOSNativeVideoOutput.shared,
             mediaLibraryOutput: IOSMediaLibraryOutput.shared,
+            fileMusicOutput: IOSFileMusicLibrary.shared,
             downloadOutput: IOSDownloadOutput.shared,
             webLoginOutput: IOSWebLoginOutput.shared,
             shareOutput: IOSShareOutput.shared,
