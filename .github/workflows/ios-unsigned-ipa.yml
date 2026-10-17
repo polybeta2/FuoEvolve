@@ -138,6 +138,9 @@ jobs:
         run: ./gradlew --warning-mode all ciIosTest
 
       - name: Build device app
+        env:
+          JAVA_TOOL_OPTIONS: -Xmx6g
+          GRADLE_OPTS: -Dorg.gradle.workers.max=1
         run: |
           xcodebuild \
             -project iosApp/FuoEvolve.xcodeproj \

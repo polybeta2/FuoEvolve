@@ -1,12 +1,14 @@
 package org.feeluown.mobile
 
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import platform.Foundation.NSUserDefaults
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalForeignApi::class)
@@ -78,6 +80,34 @@ class IosLocalMusicRepositoryTest {
             defaults = defaults,
         )
         assertEquals(listOf("Sandbox song"), failedApple.refreshDatabase().map { it.title })
+    }
+
+    @Test
+    fun throwingFileScanIsIsolatedFromAppleSource() = runTest {
+        val download = providerTrack("download", "Downloaded")
+        val repository = IosLocalMusicRepository(
+            mediaLibrary = FakeMediaLibraryOutput(json = mediaJson("apple", "Apple song")),
+            fileMusicOutput = ThrowingFileMusicOutput(IllegalStateException("file scan failed")),
+            downloadTasks = {
+                listOf(completedDownload(download, "file:///Documents/FeelUOwn/download.mp3"))
+            },
+            defaults = defaults,
+        )
+
+        assertEquals(setOf("Apple song", "Downloaded"), repository.refreshDatabase().map { it.title }.toSet())
+    }
+
+    @Test
+    fun fileScanCancellationIsPropagated() = runTest {
+        val repository = IosLocalMusicRepository(
+            mediaLibrary = FakeMediaLibraryOutput(hasPermission = false),
+            fileMusicOutput = ThrowingFileMusicOutput(CancellationException("cancel scan")),
+            defaults = defaults,
+        )
+
+        val failure = runCatching { repository.refreshDatabase() }.exceptionOrNull()
+
+        assertIs<CancellationException>(failure)
     }
 
     @Test
@@ -233,6 +263,10 @@ class IosLocalMusicRepositoryTest {
 
     private class FakeFileMusicOutput(private val json: String) : IosFileMusicOutput {
         override fun tracksJson(): String = json
+    }
+
+    private class ThrowingFileMusicOutput(private val failure: Exception) : IosFileMusicOutput {
+        override fun tracksJson(): String = throw failure
     }
 
     private companion object {

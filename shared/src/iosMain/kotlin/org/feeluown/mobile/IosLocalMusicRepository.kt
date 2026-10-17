@@ -278,7 +278,7 @@ private inline fun <T> isolatedSource(block: () -> T): T? = try {
     block()
 } catch (cancelled: CancellationException) {
     throw cancelled
-} catch (_: Throwable) {
+} catch (_: Exception) {
     null
 }
 
@@ -286,7 +286,7 @@ private inline fun <T> isolatedItem(block: () -> T): T? = try {
     block()
 } catch (cancelled: CancellationException) {
     throw cancelled
-} catch (_: Throwable) {
+} catch (_: Exception) {
     null
 }
 
