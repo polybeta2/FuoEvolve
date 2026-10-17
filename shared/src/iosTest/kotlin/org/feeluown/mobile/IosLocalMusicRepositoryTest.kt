@@ -91,6 +91,7 @@ class IosLocalMusicRepositoryTest {
             downloadTasks = {
                 listOf(completedDownload(download, "file:///Documents/FeelUOwn/download.mp3"))
             },
+            fileExists = { true },
             defaults = defaults,
         )
 
