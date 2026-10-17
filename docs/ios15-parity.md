@@ -47,4 +47,16 @@ The integrated implementation passed a fresh local `ciArchitectureCheck ciAndroi
 
 The first manual Apple run, `39016946785` in `polybeta2/FuoEvolve`, returned HTTP 500 on dispatch and remained queued without jobs; cancellation reported it already completed. Run `39017368713` then exposed that checkout requires a full SHA, and run `39017475935` exposed a broken pipe caused by early exit when parsing Xcode output. Both input validation and output consumption were corrected in `55e3dcc`.
 
-Run `39017812603` used default-branch workflow `6b5c1c2` and source `55e3dcc` with Xcode 26.6. `ciIosTest` passed on the macOS runner. Release device linking failed in Kotlin/Native `DevirtualizationAnalysis` with `java.lang.OutOfMemoryError: Java heap space`; packaging was not reached. The follow-up workflow adjusts resources only in CI. Swift/device packaging and real-device acceptance still require a successful later run and installation.
+Run `39017812603` used default-branch workflow `6b5c1c2` and source `55e3dcc` with Xcode 26.6. `ciIosTest` passed on the macOS runner. Release device linking failed in Kotlin/Native `DevirtualizationAnalysis` with `java.lang.OutOfMemoryError: Java heap space`; packaging was not reached. The follow-up workflow adjusts resources only in CI.
+
+Build 2 run `39020022677` pinned source `4829a77`: `ciIosTest` passed with the complete feature implementation, and the tuned 6 GB single-worker Release framework build completed. The Swift scanner also compiled. Final app linking failed because the new SQLDelight native dependency requires explicit linkage to system `sqlite3`; commit `8a26798` adds it to both Xcode configurations.
+
+Run `39021768952` succeeded in 24m11s with source `8a26798c2f83cd927387fbdea0a545082814edcc`, Release, and tests enabled. It passed `ciIosTest`, built the unsigned device app, packaged the IPA, and uploaded both artifacts. Artifact `FuoEvolve-unsigned-ipa-8a26798` is retained for 14 days.
+
+Downloaded IPA: `build/artifacts/ios15-8a26798/FuoEvolve-unsigned-8a26798.ipa` (19,842,952 bytes). SHA256 verified against the CI manifest:
+
+```text
+2bf639a09eca3f68096e58fa0787afbd8ad3fbb50ac2733f2fd7c288fd6a72f0
+```
+
+The packaged plist confirms `MinimumOSVersion=15.0`, bundle identifier `org.feeluown.mobile`, Files sharing enabled, and audio/processing background modes. Real-device acceptance remains pending; QuickJS/ICU minimum-OS linker warnings remain a runtime risk.
