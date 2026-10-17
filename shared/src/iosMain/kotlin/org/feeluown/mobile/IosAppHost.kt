@@ -10,6 +10,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import org.feeluown.mobile.persistence.listening.IosListeningHistoryDriverFactory
+import org.feeluown.mobile.persistence.listening.SqlDelightListeningHistoryStore
 import platform.UIKit.UIViewController
 
 internal fun handleIosLocalPlaylistImportResult(
@@ -152,7 +154,7 @@ private class IosAppContainer(
     private val homeRefreshPort: HomeRefreshPort by lazy { createHomeRefreshPort { homeFeatureController } }
     private val oauthDeviceCodeAssistant: OAuthDeviceCodeAssistant = IosOAuthDeviceCodeAssistant(oauthDeviceCodeOutput)
     private val playbackQueueStore = IosPlaybackQueueStore()
-    private val listeningHistorySink: ListeningHistorySink = NoOpListeningHistorySink
+    private val listeningHistorySink: ListeningHistorySink = SqlDelightListeningHistoryStore(IosListeningHistoryDriverFactory())
     private val resourceCacheRepository = IosResourceCacheRepository()
     private val debugLogFeatureController by lazy { createDebugLogFeatureController(NoOpDebugLogRepository, scope) }
     private val audioRecognitionRepository = IosAudioRecognitionRepository(audioRecognitionOutput)

@@ -99,6 +99,12 @@ tasks.register("ciCoverage") {
 
 subprojects {
     val subprojectPath = path
+    val androidHostTests = tasks.matching { it.name == "testAndroidHostTest" }
+    val iosSimulatorTests = tasks.matching { it.name == "iosSimulatorArm64Test" }
+    val desktopTests = tasks.matching { it.name == "desktopTest" }
+    ciAndroidTest.configure { dependsOn(androidHostTests) }
+    ciIosTest.configure { dependsOn(iosSimulatorTests) }
+    ciDesktopTest.configure { dependsOn(desktopTests) }
 
     // Only real Kover-enabled modules expose a coverage variant. Container
     // projects such as :feature or :provider deliberately have no variants and
@@ -112,16 +118,6 @@ subprojects {
     // assumptions that every KMP/Android target exposes every test task.
     afterEvaluate {
         val taskNames = tasks.names
-
-        if ("testAndroidHostTest" in taskNames) {
-            ciAndroidTest.configure { dependsOn("$subprojectPath:testAndroidHostTest") }
-        }
-        if ("iosSimulatorArm64Test" in taskNames) {
-            ciIosTest.configure { dependsOn("$subprojectPath:iosSimulatorArm64Test") }
-        }
-        if ("desktopTest" in taskNames) {
-            ciDesktopTest.configure { dependsOn("$subprojectPath:desktopTest") }
-        }
 
         taskNames
             .filter { it.startsWith("check") && it.endsWith("Boundaries") }

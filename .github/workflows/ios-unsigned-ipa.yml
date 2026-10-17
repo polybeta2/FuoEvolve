@@ -1,0 +1,200 @@
+name: iOS Unsigned IPA
+
+"on":
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or SHA to build
+        required: false
+        default: feat/ios15-parity
+        type: string
+      configuration:
+        description: Build configuration
+        required: false
+        default: Release
+        type: choice
+        options:
+          - Release
+          - Debug
+      run_tests:
+        description: Run ciIosTest before building
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  unsigned-ipa:
+    name: Build unsigned device IPA
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      BUILD_REF: ${{ inputs.ref }}
+      BUILD_CONFIGURATION: ${{ inputs.configuration }}
+
+    steps:
+      - name: Validate build inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${BUILD_REF//[[:space:]]/}" ]]; then
+            echo "::error::ref must not be empty"
+            exit 1
+          fi
+          if [[ ! "$BUILD_REF" =~ ^[0-9a-fA-F]{7,40}$ ]] && ! git check-ref-format --branch "$BUILD_REF" >/dev/null; then
+            echo "::error::ref is not a valid branch name or commit SHA: $BUILD_REF"
+            exit 1
+          fi
+          case "$BUILD_CONFIGURATION" in
+            Release|Debug) ;;
+            *)
+              echo "::error::configuration must be Release or Debug"
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ env.BUILD_REF }}
+
+      - name: Record source and prepare Git refs
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha="$(git rev-parse --verify 'HEAD^{commit}')"
+          echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${source_sha:0:7}" >> "$GITHUB_OUTPUT"
+          echo "Checked out source: $source_sha"
+
+          git fetch --no-tags origin +refs/heads/master:refs/remotes/origin/master
+          if [[ "$(git symbolic-ref --quiet --short HEAD || true)" != "master" ]]; then
+            git branch --force master refs/remotes/origin/master
+          fi
+          git rev-parse --verify 'master^{commit}'
+
+      - name: Select available Xcode 26 or newer
+        shell: bash
+        run: |
+          set -euo pipefail
+          selected=""
+          current_developer_dir="$(xcode-select --print-path)"
+          current_app="${current_developer_dir%/Contents/Developer}"
+          for app in "$current_app" /Applications/Xcode*.app; do
+            [[ -d "$app" ]] || continue
+            version="$("$app/Contents/Developer/usr/bin/xcodebuild" -version | awk '/^Xcode / { print $2; exit }')"
+            major="${version%%.*}"
+            if [[ "$major" =~ ^[0-9]+$ ]] && (( major >= 26 )); then
+              selected="$app"
+              break
+            fi
+          done
+
+          if [[ -z "$selected" ]]; then
+            echo "::error::No installed Xcode 26 or newer was found"
+            find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -print
+            exit 1
+          fi
+          sudo xcode-select --switch "$selected/Contents/Developer"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          add-job-summary: never
+
+      - name: Cache Kotlin/Native toolchain
+        uses: actions/cache@v6
+        with:
+          path: ~/.konan
+          key: ${{ runner.os }}-${{ runner.arch }}-konan-${{ hashFiles('gradle/libs.versions.toml') }}
+
+      - name: Log toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          sw_vers
+          xcode-select --print-path
+          xcodebuild -version
+          xcrun swift --version
+          java -version
+          ./gradlew --version
+
+      - name: Run Kotlin Multiplatform tests
+        if: ${{ inputs.run_tests }}
+        run: ./gradlew --warning-mode all ciIosTest
+
+      - name: Build device app
+        run: |
+          xcodebuild \
+            -project iosApp/FuoEvolve.xcodeproj \
+            -scheme FuoEvolve \
+            -configuration "$BUILD_CONFIGURATION" \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath build/ios \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build
+
+      - name: Locate built app
+        id: app-path
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="build/ios/Build/Products/${BUILD_CONFIGURATION}-iphoneos/FuoEvolve.app"
+          if [ ! -d "$APP" ]; then
+            echo "::error::Expected app not found at $APP"
+            exit 1
+          fi
+          echo "app=$APP" >> "$GITHUB_OUTPUT"
+
+      - name: Package unsigned IPA
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging="$(mktemp -d "$RUNNER_TEMP/fuoevolve-unsigned-ipa.XXXXXX")"
+          output="$GITHUB_WORKSPACE/build/artifacts"
+          ipa_name="FuoEvolve-unsigned-${{ steps.source.outputs.short_sha }}.ipa"
+          mkdir -p "$staging/Payload" "$output"
+          cp -R "${{ steps.app-path.outputs.app }}" "$staging/Payload/"
+          (
+            cd "$staging"
+            zip -qry "$output/$ipa_name" Payload
+          )
+          (
+            cd "$output"
+            shasum -a 256 "$ipa_name" > SHA256SUMS.txt
+          )
+          echo "ipa=$output/$ipa_name" >> "$GITHUB_OUTPUT"
+          echo "checksum=$output/SHA256SUMS.txt" >> "$GITHUB_OUTPUT"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: FuoEvolve-unsigned-ipa-${{ steps.source.outputs.short_sha }}
+          path: |
+            ${{ steps.package.outputs.ipa }}
+            ${{ steps.package.outputs.checksum }}
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload built .app bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: FuoEvolve-app-${{ steps.source.outputs.short_sha }}
+          path: ${{ steps.app-path.outputs.app }}
+          retention-days: 14
+          if-no-files-found: error

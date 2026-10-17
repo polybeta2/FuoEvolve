@@ -104,6 +104,7 @@ kotlin {
         }
         iosMain.dependencies {
             implementation(project(":playback:runtime"))
+            implementation(project(":persistence:listening"))
             implementation(libs.androidx.datastore)
             implementation(libs.androidx.datastore.preferences)
             implementation(libs.ktor.client.darwin)
