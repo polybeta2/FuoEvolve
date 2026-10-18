@@ -64,13 +64,12 @@ internal class IosProviderCredentialStore : ProviderCredentialStore {
                 SecItemDelete(query)
             }
             val attributes = queryMap(providerId, includeData = false).toMutableMap()
+            attributes.remove(kSecMatchLimit)
             attributes[kSecValueData] = data
             val status = withDictionary(attributes) { dictionary ->
                 SecItemAdd(dictionary, null)
             }
-            check(status == 0) {
-                "Keychain write failed"
-            }
+            check(status == 0) { "Keychain write failed: $status" }
         }
     }
 
