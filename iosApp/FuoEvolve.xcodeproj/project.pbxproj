@@ -14,6 +14,7 @@
         A10000000000000000000006 /* IOSAudioRecognitionOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000017 /* IOSAudioRecognitionOutput.swift */; };
         A10000000000000000000007 /* IOSNativeVideoControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000018 /* IOSNativeVideoControls.swift */; };
         A10000000000000000000008 /* IOSFileMusicLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000019 /* IOSFileMusicLibrary.swift */; };
+        A10000000000000000000009 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001A /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,6 +27,7 @@
         A10000000000000000000017 /* IOSAudioRecognitionOutput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSAudioRecognitionOutput.swift; sourceTree = "<group>"; };
         A10000000000000000000018 /* IOSNativeVideoControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSNativeVideoControls.swift; sourceTree = "<group>"; };
         A10000000000000000000019 /* IOSFileMusicLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSFileMusicLibrary.swift; sourceTree = "<group>"; };
+        A1000000000000000000001A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -37,6 +39,17 @@
             runOnlyForDeploymentPostprocessing = 0;
         };
 /* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+        A10000000000000000000021 /* Resources */ = {
+            isa = PBXResourcesBuildPhase;
+            buildActionMask = 2147483647;
+            files = (
+                A10000000000000000000009 /* Assets.xcassets in Resources */,
+            );
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXGroup section */
         A10000000000000000000030 = {
@@ -58,6 +71,7 @@
                 A10000000000000000000018 /* IOSNativeVideoControls.swift */,
                 A10000000000000000000019 /* IOSFileMusicLibrary.swift */,
                 A10000000000000000000016 /* Info.plist */,
+                A1000000000000000000001A /* Assets.xcassets */,
             );
             path = FuoEvolve;
             sourceTree = "<group>";
@@ -81,6 +95,7 @@
                 A10000000000000000000062 /* Embed Audio Recognition Assets */,
                 A10000000000000000000050 /* Sources */,
                 A10000000000000000000020 /* Frameworks */,
+                A10000000000000000000021 /* Resources */,
             );
             buildRules = (
             );

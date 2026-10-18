@@ -621,6 +621,7 @@ final class IOSWebLoginOutput: NSObject, IosWebLoginOutput {
             let groups = (try? JSONSerialization.jsonObject(with: Data(cookieKeyGroupsJson.utf8)))
                 as? [[String]] ?? []
             let login = FuoWebLoginViewController(
+                providerId: providerId,
                 providerName: providerName,
                 url: url,
                 requiredCookieGroups: groups,
@@ -779,11 +780,15 @@ final class IOSNetworkStatusOutput: NSObject, IosNetworkStatusOutput {
 }
 
 private final class FuoWebLoginViewController: UIViewController, WKNavigationDelegate {
-    private let webView = WKWebView(frame: .zero)
+    private let webView: WKWebView
     private let requiredCookieGroups: [[String]]
     private let completion: (String?) -> Void
+    private static let desktopUserAgent =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
     init(
+        providerId: String,
         providerName: String,
         url: URL,
         requiredCookieGroups: [[String]],
@@ -791,6 +796,19 @@ private final class FuoWebLoginViewController: UIViewController, WKNavigationDel
     ) {
         self.requiredCookieGroups = requiredCookieGroups
         self.completion = completion
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = WKWebsiteDataStore.default()
+        let usesDesktopLogin = providerId == "netease" || providerId == "qqmusic"
+        if usesDesktopLogin {
+            let preferences = WKWebpagePreferences()
+            preferences.preferredContentMode = .desktop
+            configuration.defaultWebpagePreferences = preferences
+        }
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        if usesDesktopLogin {
+            webView.customUserAgent = Self.desktopUserAgent
+        }
+        self.webView = webView
         super.init(nibName: nil, bundle: nil)
         title = providerName
         webView.navigationDelegate = self

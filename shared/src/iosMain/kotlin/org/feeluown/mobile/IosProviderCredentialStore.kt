@@ -10,8 +10,12 @@ import kotlinx.cinterop.value
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.readBytes
 import kotlinx.cinterop.refTo
+import platform.CoreFoundation.CFDictionaryRef
 import platform.CoreFoundation.kCFBooleanTrue
+import platform.Foundation.CFBridgingRelease
+import platform.Foundation.CFBridgingRetain
 import platform.Foundation.NSData
+import platform.Foundation.NSDictionary
 import platform.Foundation.create
 import platform.Security.SecItemAdd
 import platform.Security.SecItemCopyMatching
@@ -38,7 +42,9 @@ internal class IosProviderCredentialStore : ProviderCredentialStore {
 
     override suspend fun read(providerId: String): ProviderCredentials? = memScoped {
         val result = alloc<ObjCObjectVar<Any?>>()
-        val status = SecItemCopyMatching(query(providerId, includeData = true), result.ptr.reinterpret())
+        val status = withDictionary(queryMap(providerId, includeData = true)) { query ->
+            SecItemCopyMatching(query, result.ptr.reinterpret())
+        }
         if (status == errSecItemNotFound) return@memScoped null
         check(status == 0) { "Keychain read failed: $status" }
         val data = result.value as? NSData ?: return@memScoped null
@@ -54,17 +60,24 @@ internal class IosProviderCredentialStore : ProviderCredentialStore {
                 bytes = bytes.refTo(0).getPointer(this),
                 length = bytes.size.toULong(),
             )
-            SecItemDelete(query(providerId, includeData = false))
+            withDictionary(queryMap(providerId, includeData = false)) { query ->
+                SecItemDelete(query)
+            }
             val attributes = queryMap(providerId, includeData = false).toMutableMap()
             attributes[kSecValueData] = data
-            check(SecItemAdd(attributes as platform.CoreFoundation.CFDictionaryRef, null) == 0) {
+            val status = withDictionary(attributes) { dictionary ->
+                SecItemAdd(dictionary, null)
+            }
+            check(status == 0) {
                 "Keychain write failed"
             }
         }
     }
 
     override suspend fun delete(providerId: String) {
-        SecItemDelete(query(providerId, includeData = false))
+        withDictionary(queryMap(providerId, includeData = false)) { query ->
+            SecItemDelete(query)
+        }
     }
 
     override suspend fun migrateLegacyIfNeeded() {
@@ -87,10 +100,6 @@ internal class IosProviderCredentialStore : ProviderCredentialStore {
         }
     }
 
-    private fun query(providerId: String, includeData: Boolean): platform.CoreFoundation.CFDictionaryRef {
-        return queryMap(providerId, includeData) as platform.CoreFoundation.CFDictionaryRef
-    }
-
     private fun queryMap(providerId: String, includeData: Boolean): MutableMap<Any?, Any?> {
         val result = mutableMapOf<Any?, Any?>(
             kSecClass to kSecClassGenericPassword,
@@ -100,6 +109,19 @@ internal class IosProviderCredentialStore : ProviderCredentialStore {
         )
         if (includeData) result[kSecReturnData] = kCFBooleanTrue
         return result
+    }
+
+    private inline fun <T> withDictionary(
+        values: Map<Any?, Any?>,
+        block: (CFDictionaryRef) -> T,
+    ): T {
+        val dictionary = NSDictionary.create(values)
+        val reference = CFBridgingRetain(dictionary) ?: error("Failed to bridge Keychain query")
+        return try {
+            block(reference.reinterpret())
+        } finally {
+            CFBridgingRelease(reference)
+        }
     }
 
     private companion object {
