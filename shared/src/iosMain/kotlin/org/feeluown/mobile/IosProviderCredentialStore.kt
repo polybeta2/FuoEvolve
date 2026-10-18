@@ -1,6 +1,7 @@
 package org.feeluown.mobile
 
 import kotlinx.cinterop.BetaInteropApi
+import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
@@ -10,12 +11,19 @@ import kotlinx.cinterop.value
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.readBytes
 import kotlinx.cinterop.refTo
+import platform.CoreFoundation.CFDictionaryCreateMutable
+import platform.CoreFoundation.CFDictionarySetValue
 import platform.CoreFoundation.CFDictionaryRef
+import platform.CoreFoundation.CFMutableDictionaryRef
+import platform.CoreFoundation.CFRelease
+import platform.CoreFoundation.CFStringCreateWithCString
+import platform.CoreFoundation.kCFStringEncodingUTF8
+import platform.CoreFoundation.kCFTypeDictionaryKeyCallBacks
+import platform.CoreFoundation.kCFTypeDictionaryValueCallBacks
 import platform.CoreFoundation.kCFBooleanTrue
 import platform.Foundation.CFBridgingRelease
 import platform.Foundation.CFBridgingRetain
 import platform.Foundation.NSData
-import platform.Foundation.NSDictionary
 import platform.Foundation.create
 import platform.Security.SecItemAdd
 import platform.Security.SecItemCopyMatching
@@ -30,6 +38,7 @@ import platform.Security.errSecItemNotFound
 import org.feeluown.mobile.provider.core.ProviderCredentialStore
 import org.feeluown.mobile.provider.core.ProviderCredentials
 import org.feeluown.mobile.provider.core.providerCredentialsFromCookieInput
+import platform.Security.errSecSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 
@@ -40,7 +49,7 @@ internal class IosProviderCredentialStore : ProviderCredentialStore {
 
     override suspend fun read(providerId: String): ProviderCredentials? = memScoped {
         val result = alloc<ObjCObjectVar<Any?>>()
-        val status = withDictionary(queryMap(providerId, includeData = true)) { query ->
+        val status = withDictionary(providerId, includeData = true) { query ->
             SecItemCopyMatching(query, result.ptr.reinterpret())
         }
         if (status == errSecItemNotFound) return@memScoped null
@@ -58,12 +67,10 @@ internal class IosProviderCredentialStore : ProviderCredentialStore {
                 bytes = bytes.refTo(0).getPointer(this),
                 length = bytes.size.toULong(),
             )
-            withDictionary(queryMap(providerId, includeData = false)) { query ->
+            withDictionary(providerId, includeData = false) { query ->
                 SecItemDelete(query)
             }
-            val attributes = queryMap(providerId, includeData = false).toMutableMap()
-            attributes[kSecValueData] = data
-            val status = withDictionary(attributes) { dictionary ->
+            val status = withDictionary(providerId, includeData = false, data = data) { dictionary ->
                 SecItemAdd(dictionary, null)
             }
             check(status == 0) { "Keychain write failed: $status" }
@@ -71,8 +78,11 @@ internal class IosProviderCredentialStore : ProviderCredentialStore {
     }
 
     override suspend fun delete(providerId: String) {
-        withDictionary(queryMap(providerId, includeData = false)) { query ->
+        val status = withDictionary(providerId, includeData = false) { query ->
             SecItemDelete(query)
+        }
+        check(status == errSecSuccess || status == errSecItemNotFound) {
+            "Keychain delete failed: $status"
         }
     }
 
@@ -96,26 +106,45 @@ internal class IosProviderCredentialStore : ProviderCredentialStore {
         }
     }
 
-    private fun queryMap(providerId: String, includeData: Boolean): MutableMap<Any?, Any?> {
-        val result = mutableMapOf<Any?, Any?>(
-            kSecClass to kSecClassGenericPassword,
-            kSecAttrService to SERVICE,
-            kSecAttrAccount to providerId,
-        )
-        if (includeData) result[kSecReturnData] = kCFBooleanTrue
-        return result
-    }
-
     private inline fun <T> withDictionary(
-        values: Map<Any?, Any?>,
+        providerId: String,
+        includeData: Boolean,
+        data: NSData? = null,
         block: (CFDictionaryRef) -> T,
     ): T {
-        val dictionary = NSDictionary.create(values)
-        val reference = CFBridgingRetain(dictionary) ?: error("Failed to bridge Keychain query")
+        val dictionary: CFMutableDictionaryRef = CFDictionaryCreateMutable(
+            null,
+            4,
+            kCFTypeDictionaryKeyCallBacks.ptr,
+            kCFTypeDictionaryValueCallBacks.ptr,
+        ) ?: error("Failed to create Keychain dictionary")
+        val service = CFStringCreateWithCString(null, SERVICE, kCFStringEncodingUTF8)
+            ?: error("Failed to create Keychain service")
+        val account = CFStringCreateWithCString(null, providerId, kCFStringEncodingUTF8)
+            ?: error("Failed to create Keychain account")
         return try {
-            block(reference.reinterpret())
+            CFDictionarySetValue(dictionary, kSecClass, kSecClassGenericPassword)
+            CFDictionarySetValue(dictionary, kSecAttrService, service)
+            CFDictionarySetValue(dictionary, kSecAttrAccount, account)
+            if (includeData) CFDictionarySetValue(dictionary, kSecReturnData, kCFBooleanTrue)
+            if (data != null) {
+                val dataReference =
+                    CFBridgingRetain(data) ?: error("Failed to bridge Keychain data")
+                try {
+                    CFDictionarySetValue(
+                        dictionary,
+                        kSecValueData,
+                        dataReference.reinterpret<ByteVar>(),
+                    )
+                } finally {
+                    CFBridgingRelease(dataReference)
+                }
+            }
+            block(dictionary)
         } finally {
-            CFBridgingRelease(reference)
+            CFRelease(service)
+            CFRelease(account)
+            CFRelease(dictionary)
         }
     }
 
