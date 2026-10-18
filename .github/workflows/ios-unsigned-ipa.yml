@@ -137,6 +137,17 @@ jobs:
         if: ${{ inputs.run_tests }}
         run: ./gradlew --warning-mode all ciIosTest
 
+      - name: Upload iOS test reports
+        if: ${{ failure() && inputs.run_tests }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-test-reports-${{ steps.source.outputs.short_sha }}
+          path: |
+            shared/build/test-results/iosSimulatorArm64Test
+            shared/build/reports/tests/iosSimulatorArm64Test
+          retention-days: 7
+          if-no-files-found: warn
+
       - name: Build device app
         env:
           JAVA_TOOL_OPTIONS: -Xmx6g
