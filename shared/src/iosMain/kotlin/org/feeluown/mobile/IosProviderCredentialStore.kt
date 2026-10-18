@@ -24,8 +24,6 @@ import platform.Security.kSecAttrAccount
 import platform.Security.kSecAttrService
 import platform.Security.kSecClass
 import platform.Security.kSecClassGenericPassword
-import platform.Security.kSecMatchLimit
-import platform.Security.kSecMatchLimitOne
 import platform.Security.kSecReturnData
 import platform.Security.kSecValueData
 import platform.Security.errSecItemNotFound
@@ -64,7 +62,6 @@ internal class IosProviderCredentialStore : ProviderCredentialStore {
                 SecItemDelete(query)
             }
             val attributes = queryMap(providerId, includeData = false).toMutableMap()
-            attributes.remove(kSecMatchLimit)
             attributes[kSecValueData] = data
             val status = withDictionary(attributes) { dictionary ->
                 SecItemAdd(dictionary, null)
@@ -104,7 +101,6 @@ internal class IosProviderCredentialStore : ProviderCredentialStore {
             kSecClass to kSecClassGenericPassword,
             kSecAttrService to SERVICE,
             kSecAttrAccount to providerId,
-            kSecMatchLimit to kSecMatchLimitOne,
         )
         if (includeData) result[kSecReturnData] = kCFBooleanTrue
         return result
